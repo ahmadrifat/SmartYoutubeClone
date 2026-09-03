@@ -1,0 +1,102 @@
+name: Update custom SmartTube
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 */6 * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: custom-smarttube-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      JAVA_TOOL_OPTIONS: -Xmx4g
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check upstream version
+        id: check
+        run: |
+          python3 scripts/update.py check \
+            --repository "$GITHUB_REPOSITORY" \
+            --manifest-output work/upstream.json
+
+      - name: Download tools and upstream APK
+        if: steps.check.outputs.needs_update == 'true'
+        env:
+          APK_URL: ${{ steps.check.outputs.apk_url }}
+        run: |
+          mkdir -p work/tools
+          python3 scripts/update.py download-apktool --output work/tools/apktool.jar
+          python3 -c 'import os, urllib.request; urllib.request.urlretrieve(os.environ["APK_URL"], "work/upstream.apk")'
+
+      - name: Decode and patch APK
+        if: steps.check.outputs.needs_update == 'true'
+        env:
+          UPDATE_URL: ${{ steps.check.outputs.update_url }}
+        run: |
+          java -jar work/tools/apktool.jar d -f -p work/framework work/upstream.apk -o work/decoded
+          python3 scripts/update.py patch \
+            --decoded work/decoded \
+            --update-url "$UPDATE_URL" \
+            --icon assets/icon.png
+          java -jar work/tools/apktool.jar b -p work/framework work/decoded -o work/unsigned.apk
+
+      - name: Align, sign, and verify
+        if: steps.check.outputs.needs_update == 'true'
+        run: |
+          python3 - <<'PY'
+          import base64
+          import pathlib
+          import urllib.request
+
+          base = "https://android.googlesource.com/platform/build/+/refs/heads/main/target/product/security/"
+          for name in ("testkey.pk8", "testkey.x509.pem"):
+              encoded = urllib.request.urlopen(base + name + "?format=TEXT").read()
+              (pathlib.Path("work") / name).write_bytes(base64.b64decode(encoded))
+          PY
+          openssl x509 -in work/testkey.x509.pem -outform DER |
+            sha256sum |
+            grep -qi '^a40da80a59d170caa950cf15c18c454d47a39b26989d8b640ecd745ba71bf5dc'
+          BUILD_TOOLS="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
+          "$BUILD_TOOLS/zipalign" -f -p 4 work/unsigned.apk work/aligned.apk
+          "$BUILD_TOOLS/apksigner" sign \
+            --key work/testkey.pk8 \
+            --cert work/testkey.x509.pem \
+            --out work/custom-smarttube.apk \
+            work/aligned.apk
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs work/custom-smarttube.apk
+
+      - name: Create custom update manifest
+        if: steps.check.outputs.needs_update == 'true'
+        run: |
+          python3 scripts/update.py manifest \
+            --input work/upstream.json \
+            --output work/update.json \
+            --repository "$GITHUB_REPOSITORY"
+
+      - name: Publish fixed update channel
+        if: steps.check.outputs.needs_update == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION_NAME: ${{ steps.check.outputs.version_name }}
+        run: |
+          if gh release view custom-latest >/dev/null 2>&1; then
+            gh release edit custom-latest --title "Custom SmartTube $VERSION_NAME"
+          else
+            gh release create custom-latest \
+              --title "Custom SmartTube $VERSION_NAME" \
+              --notes "Automatically repackaged from the official SmartTube stable APK."
+          fi
+          gh release upload custom-latest \
+            work/custom-smarttube.apk \
+            work/update.json \
+            --clobber

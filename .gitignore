@@ -1,0 +1,5 @@
+work/
+__pycache__/
+*.apk
+*.pk8
+*.pem
