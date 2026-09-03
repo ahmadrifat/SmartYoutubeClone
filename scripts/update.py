@@ -144,12 +144,16 @@ def command_patch(args: argparse.Namespace) -> None:
         r"smarttube_(?:stable|stable2|beta|beta2)\.json"
     )
     replacements = 0
+    app_name_re = re.compile(
+        r'(<string\\s+name="app_name"[^>]*>).*?(</string>)', re.DOTALL
+    )
     for xml_path in (decoded / "res").rglob("*.xml"):
         text = xml_path.read_text(encoding="utf-8")
         updated, count = url_re.subn(args.update_url, text)
-        if count:
+        updated, name_count = app_name_re.subn(r"\\1SmartTube\\2", updated)
+        if count or name_count:
             xml_path.write_text(updated, encoding="utf-8")
-            replacements += count
+        replacements += count
     if replacements == 0:
         raise RuntimeError("Could not find an upstream update URL to replace")
 
