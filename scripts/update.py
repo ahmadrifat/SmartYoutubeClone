@@ -175,12 +175,12 @@ def command_patch(args: argparse.Namespace) -> None:
     )
     replacements = 0
     app_name_re = re.compile(
-        r'(<string\\s+name="app_name"[^>]*>).*?(</string>)', re.DOTALL
+        r'(<string\s+name="app_name"[^>]*>).*?(</string>)', re.DOTALL
     )
     for xml_path in (decoded / "res").rglob("*.xml"):
         text = xml_path.read_text(encoding="utf-8")
         updated, count = url_re.subn(args.update_url, text)
-        updated, name_count = app_name_re.subn(r"\\1SmartTube\\2", updated)
+        updated, name_count = app_name_re.subn(r"\1SmartTube\2", updated)
         if count or name_count:
             xml_path.write_text(updated, encoding="utf-8")
         replacements += count
@@ -230,7 +230,8 @@ def parser() -> argparse.ArgumentParser:
     check = commands.add_parser("check")
     check.add_argument("--repository", required=True)
     check.add_argument("--manifest-output", required=True)
-    check.add_argument("--upstream-manifest", default=UPSTREAM_MANIFEST)\n    check.add_argument("--force", action="store_true")
+    check.add_argument("--upstream-manifest", default=UPSTREAM_MANIFEST)
+    check.add_argument("--force", action="store_true")
     check.set_defaults(func=command_check)
 
     patch = commands.add_parser("patch")
@@ -258,3 +259,4 @@ if __name__ == "__main__":
     except Exception as error:
         print(f"error: {error}", file=sys.stderr)
         raise
+
