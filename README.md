@@ -7,7 +7,7 @@ does nothing when the published custom APK already has the newest upstream
 1. downloads the official ARM (`armeabi-v7a`) APK;
 2. changes the package to `com.google.android.youtube.tv`;
 3. changes the built-in update URL to this repository's fixed release URL;
-4. replaces the launcher icon with `assets/icon.png`;
+4. replaces the TV banner, logo, launcher icon, and downscaled icon with the matching files in `assets/`;
 5. changes the startup-update callback to open the existing installer flow
    immediately;
 6. signs with the same AOSP test key previously used by ApkRenamer; and
@@ -33,7 +33,7 @@ Run **Actions > Update custom SmartTube > Run workflow** once. Download
 `custom-smarttube.apk` from the resulting `custom-latest` release and install it
 on the TV. This is the one manual bootstrap update.
 
-The workflow then checks every six hours. Change the cron expression in
+The workflow then checks every six hours. A push to `main` forces one rebuild so branding or patcher changes are published even when the upstream version is unchanged. Change the cron expression in
 `.github/workflows/update.yml` if a different interval is preferred.
 
 ## Important assumptions

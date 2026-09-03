@@ -79,7 +79,7 @@ def command_check(args: argparse.Namespace) -> None:
         _, custom_release = latest_release(custom)
         custom_code = int(custom_release["versionCode"])
 
-    needs_update = upstream_code > custom_code
+    needs_update = args.force or upstream_code > custom_code
     urls = upstream.get("package", {}).get("downloadUrlList", [])
     if not urls:
         raise RuntimeError("Upstream ARM download URL is missing")
@@ -125,18 +125,48 @@ def command_patch(args: argparse.Namespace) -> None:
     if count != 1:
         raise RuntimeError("Could not replace manifest package")
 
-    icon_path = Path(args.icon)
-    if icon_path.exists():
-        target_icon = decoded / "res" / "mipmap-nodpi" / "custom_youtube_icon.png"
-        target_icon.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(icon_path, target_icon)
-        if re.search(r'android:icon="[^"]+"', manifest):
-            manifest = re.sub(
-                r'android:icon="[^"]+"',
-                'android:icon="@mipmap/custom_youtube_icon"',
-                manifest,
-                count=1,
-            )
+    assets = Path(args.assets)
+    required_assets = {
+        "app_banner.png": assets / "app_banner.png",
+        "app_logo.png": assets / "app_logo.png",
+        "app_icon.png": assets / "app_icon.png",
+        "app_icon_downscaled.png": assets / "app_icon_downscaled.png",
+    }
+    missing = [str(path) for path in required_assets.values() if not path.is_file()]
+    if missing:
+        raise RuntimeError(f"Missing branding assets: {', '.join(missing)}")
+
+    resource_root = decoded / "res"
+    replaced_assets = set()
+    for target in resource_root.rglob("app_banner.png"):
+        shutil.copyfile(required_assets["app_banner.png"], target)
+        replaced_assets.add("app_banner.png")
+    for target in resource_root.rglob("app_logo.png"):
+        shutil.copyfile(required_assets["app_logo.png"], target)
+        replaced_assets.add("app_logo.png")
+    for target in resource_root.rglob("app_icon.png"):
+        source = required_assets["app_icon.png"]
+        if "mipmap-nodpi-v30" in target.parent.as_posix():
+            source = required_assets["app_icon_downscaled.png"]
+        shutil.copyfile(source, target)
+        replaced_assets.add("app_icon.png")
+    for target in resource_root.rglob("app_icon_alt.png"):
+        shutil.copyfile(required_assets["app_icon.png"], target)
+
+    expected_assets = {"app_banner.png", "app_logo.png", "app_icon.png"}
+    if replaced_assets != expected_assets:
+        raise RuntimeError(
+            f"Expected APK branding resources were not found: "
+            f"{sorted(expected_assets - replaced_assets)}"
+        )
+
+    if re.search(r'android:icon="[^"]+"', manifest):
+        manifest = re.sub(
+            r'android:icon="[^"]+"',
+            'android:icon="@mipmap/app_icon"',
+            manifest,
+            count=1,
+        )
     manifest_path.write_text(manifest, encoding="utf-8")
 
     url_re = re.compile(
@@ -200,13 +230,13 @@ def parser() -> argparse.ArgumentParser:
     check = commands.add_parser("check")
     check.add_argument("--repository", required=True)
     check.add_argument("--manifest-output", required=True)
-    check.add_argument("--upstream-manifest", default=UPSTREAM_MANIFEST)
+    check.add_argument("--upstream-manifest", default=UPSTREAM_MANIFEST)\n    check.add_argument("--force", action="store_true")
     check.set_defaults(func=command_check)
 
     patch = commands.add_parser("patch")
     patch.add_argument("--decoded", required=True)
     patch.add_argument("--update-url", required=True)
-    patch.add_argument("--icon", default="assets/icon.png")
+    patch.add_argument("--assets", default="assets")
     patch.set_defaults(func=command_patch)
 
     manifest = commands.add_parser("manifest")

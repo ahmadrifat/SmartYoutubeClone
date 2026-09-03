@@ -27,9 +27,11 @@ jobs:
       - name: Check upstream version
         id: check
         run: |
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then FORCE_REBUILD=--force; fi
           python3 scripts/update.py check \
             --repository "$GITHUB_REPOSITORY" \
-            --manifest-output work/upstream.json
+            --manifest-output work/upstream.json \
+            $FORCE_REBUILD
 
       - name: Download tools and upstream APK
         if: steps.check.outputs.needs_update == 'true'
@@ -49,7 +51,7 @@ jobs:
           python3 scripts/update.py patch \
             --decoded work/decoded \
             --update-url "$UPDATE_URL" \
-            --icon assets/icon.png
+            --assets assets
           java -jar work/tools/apktool.jar b -p work/framework work/decoded -o work/unsigned.apk
 
       - name: Align, sign, and verify
