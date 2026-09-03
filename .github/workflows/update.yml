@@ -27,9 +27,11 @@ jobs:
       - name: Check upstream version
         id: check
         run: |
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then FORCE_REBUILD=--force; fi
           python3 scripts/update.py check \
             --repository "$GITHUB_REPOSITORY" \
-            --manifest-output work/upstream.json \\\n            $FORCE_REBUILD
+            --manifest-output work/upstream.json \
+            $FORCE_REBUILD
 
       - name: Download tools and upstream APK
         if: steps.check.outputs.needs_update == 'true'
