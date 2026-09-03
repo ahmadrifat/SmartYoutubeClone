@@ -1,4 +1,4 @@
-# SmartTube family updater
+# Custom SmartTube
 
 This small repository periodically checks SmartTube's stable update manifest. It
 does nothing when the published custom APK already has the newest upstream
