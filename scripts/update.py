@@ -18,6 +18,10 @@ UPSTREAM_MANIFEST = (
     "https://github.com/yuliskov/SmartTubeNext/releases/download/latest/"
     "smarttube_stable2.json"
 )
+UPSTREAM_UNIVERSAL_APK = (
+    "https://github.com/yuliskov/SmartTube/releases/download/latest/"
+    "smarttube_stable.apk"
+)
 TARGET_PACKAGE = "com.google.android.youtube.tv"
 USER_AGENT = "smarttube-family-updater/1"
 
@@ -80,10 +84,6 @@ def command_check(args: argparse.Namespace) -> None:
         custom_code = int(custom_release["versionCode"])
 
     needs_update = args.force or upstream_code > custom_code
-    urls = upstream.get("package", {}).get("downloadUrlList", [])
-    if not urls:
-        raise RuntimeError("Upstream ARM download URL is missing")
-
     Path(args.manifest_output).parent.mkdir(parents=True, exist_ok=True)
     Path(args.manifest_output).write_text(
         json.dumps(upstream, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
@@ -91,7 +91,7 @@ def command_check(args: argparse.Namespace) -> None:
     set_output("needs_update", needs_update)
     set_output("version_name", version_name)
     set_output("version_code", upstream_code)
-    set_output("apk_url", urls[0])
+    set_output("apk_url", UPSTREAM_UNIVERSAL_APK)
     set_output("update_url", custom_url)
 
 
@@ -200,7 +200,7 @@ def command_manifest(args: argparse.Namespace) -> None:
     manifest = json.loads(Path(args.input).read_text(encoding="utf-8"))
     download_url = (
         f"https://github.com/{args.repository}/releases/download/"
-        "custom-latest/custom-smarttube.apk"
+        f"custom-{args.version_name}/SmartTube_{args.version_name}_universal.apk"
     )
     package = manifest.setdefault("package", {})
     for key in list(package):
@@ -244,6 +244,7 @@ def parser() -> argparse.ArgumentParser:
     manifest.add_argument("--input", required=True)
     manifest.add_argument("--output", required=True)
     manifest.add_argument("--repository", required=True)
+    manifest.add_argument("--version-name", required=True)
     manifest.set_defaults(func=command_manifest)
 
     apktool = commands.add_parser("download-apktool")
@@ -259,4 +260,5 @@ if __name__ == "__main__":
     except Exception as error:
         print(f"error: {error}", file=sys.stderr)
         raise
+
 
