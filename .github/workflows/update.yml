@@ -106,8 +106,10 @@ jobs:
               --title "Custom SmartTube $VERSION_NAME (Universal)" \
               --notes "Automatically customized from the official SmartTube stable universal APK."
           fi
+          cp work/custom-smarttube.apk "work/$APK_NAME"
+          gh release delete-asset "$VERSION_TAG" custom-smarttube.apk --yes 2>/dev/null || true
           gh release upload "$VERSION_TAG" \
-            "work/custom-smarttube.apk#$APK_NAME" \
+            "work/$APK_NAME" \
             work/update.json \
             --clobber
 
