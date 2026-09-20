@@ -5,7 +5,7 @@ on:
     branches: [main]
   workflow_dispatch:
   schedule:
-    - cron: "17 */6 * * *"
+    - cron: "17 0 * * *"
 
 permissions:
   contents: write
@@ -81,26 +81,43 @@ jobs:
 
       - name: Create custom update manifest
         if: steps.check.outputs.needs_update == 'true'
+        env:
+          VERSION_NAME: ${{ steps.check.outputs.version_name }}
         run: |
           python3 scripts/update.py manifest \
             --input work/upstream.json \
             --output work/update.json \
-            --repository "$GITHUB_REPOSITORY"
+            --repository "$GITHUB_REPOSITORY" \
+            --version-name "$VERSION_NAME"
 
-      - name: Publish fixed update channel
+      - name: Publish versioned release and update channel
         if: steps.check.outputs.needs_update == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION_NAME: ${{ steps.check.outputs.version_name }}
         run: |
-          if gh release view custom-latest >/dev/null 2>&1; then
-            gh release edit custom-latest --title "Custom SmartTube $VERSION_NAME"
+          VERSION_TAG="custom-$VERSION_NAME"
+          APK_NAME="SmartTube_${VERSION_NAME}_universal.apk"
+
+          if gh release view "$VERSION_TAG" >/dev/null 2>&1; then
+            gh release edit "$VERSION_TAG" --title "Custom SmartTube $VERSION_NAME (Universal)"
           else
-            gh release create custom-latest \
-              --title "Custom SmartTube $VERSION_NAME" \
-              --notes "Automatically repackaged from the official SmartTube stable APK."
+            gh release create "$VERSION_TAG" \
+              --title "Custom SmartTube $VERSION_NAME (Universal)" \
+              --notes "Automatically customized from the official SmartTube stable universal APK."
           fi
-          gh release upload custom-latest \
-            work/custom-smarttube.apk \
+          gh release upload "$VERSION_TAG" \
+            "work/custom-smarttube.apk#$APK_NAME" \
             work/update.json \
             --clobber
+
+          if gh release view custom-latest >/dev/null 2>&1; then
+            gh release edit custom-latest --title "Custom SmartTube update channel"
+          else
+            gh release create custom-latest \
+              --title "Custom SmartTube update channel" \
+              --notes "Machine-readable update channel. Download APKs from the versioned releases."
+          fi
+          gh release delete-asset custom-latest custom-smarttube.apk --yes 2>/dev/null || true
+          gh release upload custom-latest work/update.json --clobber
+
